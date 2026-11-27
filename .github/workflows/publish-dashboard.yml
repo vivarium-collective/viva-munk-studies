@@ -1,0 +1,95 @@
+name: Publish read-only workbench
+
+# Build the workspace into a self-contained static SPA snapshot and publish it to
+# the gh-pages branch at workbench/ (served at
+# <org>.github.io/viva-munk-studies/workbench/) — the READ-ONLY mirror of every
+# investigation + study on main, browsable with no server.
+#
+# Hand-authored for viva-munk-studies' top-level layout (studies/, investigations/)
+# and its pinned-simulator model; calls `vivarium-workbench-publish` directly
+# rather than the template's scripts/publish_dashboard.sh wrapper.
+#
+# DEPLOY job (post-merge to main), NOT a PR gate — a failure here never blocks a
+# merge (workspace-ci runs the same build as the gate).
+#
+# One-time setup: Settings -> Pages -> Source = "Deploy from a branch" -> gh-pages
+# (this workflow creates gh-pages on its first run).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'studies/**'
+      - 'investigations/**'
+      - 'workspace.yaml'
+      - '.github/workflows/publish-dashboard.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: publish-dashboard
+  cancel-in-progress: true
+
+permissions:
+  contents: write   # push to the gh-pages branch
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install workspace deps
+        run: |
+          uv venv --python 3.12
+          uv pip install ".[dev]"
+      - name: Ensure the publish CLI is current (latest dashboard main)
+        run: uv pip install --refresh-package vivarium-workbench --reinstall-package vivarium-workbench "vivarium-workbench @ git+https://github.com/vivarium-collective/vivarium-workbench.git@main"
+      - name: Build read-only workbench snapshot
+        run: |
+          source .venv/bin/activate
+          vivarium-workbench-publish \
+            --workspace . \
+            --out reports/published/workbench \
+            --base-path "/${{ github.event.repository.name }}/workbench" \
+            --interactive-url "${{ github.server_url }}/${{ github.repository }}"
+      - name: Publish to gh-pages
+        run: |
+          set -euo pipefail
+          if [ ! -f reports/published/workbench/index.html ]; then
+            echo "::error::build produced no bundle (no index.html); nothing to publish"
+            exit 1
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch origin gh-pages
+            git worktree add /tmp/ghp gh-pages
+          else
+            echo "gh-pages does not exist yet — bootstrapping it"
+            git worktree add --detach /tmp/ghp
+            ( cd /tmp/ghp && git checkout --orphan gh-pages && git rm -rf . >/dev/null 2>&1 || true )
+          fi
+          rm -rf /tmp/ghp/workbench
+          mkdir -p /tmp/ghp/workbench
+          cp -R reports/published/workbench/. /tmp/ghp/workbench/
+          touch /tmp/ghp/.nojekyll
+          cd /tmp/ghp
+          git add -A
+          if git diff --cached --quiet; then
+            echo "read-only workbench snapshot unchanged; skipping commit"
+          else
+            git commit -m "gh-pages: republish read-only workbench (automated, ${GITHUB_SHA::7})"
+            git push origin gh-pages
+            echo "published read-only workbench to gh-pages:workbench/"
+          fi
