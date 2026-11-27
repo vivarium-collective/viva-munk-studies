@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.DS_Store
+*.zarr/
+out/
+history.db
+# regenerable run artifacts
+**/_runstore/
+**/runs.db
+**/sims/

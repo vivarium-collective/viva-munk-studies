@@ -2,6 +2,10 @@
 # One study exercising the `glucose_growth` composite from the viva-munk report.
 schema_version: 4
 name: glucose-growth
+simulator:
+  package: viva-munk
+  ref: "0.1.0"
+  registry: git
 title: "Glucose Growth"
 created: '2026-06-02'
 status: complete

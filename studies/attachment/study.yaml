@@ -2,6 +2,10 @@
 # One study exercising the `attachment` composite from the viva-munk report.
 schema_version: 4
 name: attachment
+simulator:
+  package: viva-munk
+  ref: "0.1.0"
+  registry: git
 title: "Attachment"
 created: '2026-06-02'
 status: complete

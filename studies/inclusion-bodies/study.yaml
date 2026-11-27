@@ -2,6 +2,10 @@
 # One study exercising the `inclusion_bodies` composite from the viva-munk report.
 schema_version: 4
 name: inclusion-bodies
+simulator:
+  package: viva-munk
+  ref: "0.1.0"
+  registry: git
 title: "Inclusion Bodies"
 created: '2026-06-02'
 status: complete

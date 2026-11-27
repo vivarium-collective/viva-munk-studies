@@ -2,6 +2,10 @@
 # One study exercising the `quorum_sensing` composite from the viva-munk report.
 schema_version: 4
 name: quorum-sensing
+simulator:
+  package: viva-munk
+  ref: "0.1.0"
+  registry: git
 title: "Quorum Sensing"
 created: '2026-06-02'
 status: complete

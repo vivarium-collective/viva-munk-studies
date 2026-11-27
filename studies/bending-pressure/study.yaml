@@ -2,6 +2,10 @@
 # One study exercising the `bending_pressure` composite from the viva-munk report.
 schema_version: 4
 name: bending-pressure
+simulator:
+  package: viva-munk
+  ref: "0.1.0"
+  registry: git
 title: "Bending Pressure"
 created: '2026-06-02'
 status: complete
