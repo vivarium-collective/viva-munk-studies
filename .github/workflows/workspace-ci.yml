@@ -1,0 +1,65 @@
+name: workspace-ci
+
+# PR gate for the viva-munk-studies workspace. Hand-authored (not generated from
+# viva-template) because this workspace uses the default top-level layout
+# (studies/, investigations/) rather than the template's workspace/ subdir, and
+# consumes the simulator as a pinned dependency (viva-munk) instead of shipping a
+# package of its own.
+#
+# Checks:
+#   1. the workspace installs (resolves the pinned simulator + workbench + DE),
+#   2. every study's simulator pin matches the installed simulator version
+#      (L2 simulator-pin audit), and
+#   3. the read-only dashboard snapshot builds (no study would 404 on the
+#      published site) — the same build the deploy runs, as a pre-merge gate.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: workspace-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONUTF8: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv python install 3.12
+      - name: Install workspace (pins the simulator + workbench + discovery-engine)
+        run: |
+          uv venv --python 3.12
+          uv pip install ".[dev]"
+      - name: Simulator pins resolve and match the installed simulator
+        run: |
+          uv run python - <<'PY'
+          import sys, yaml
+          from pathlib import Path
+          from discovery_engine.study import audit as A
+          fails = []
+          for sy in sorted(Path("studies").glob("*/study.yaml")):
+              spec = yaml.safe_load(sy.read_text())
+              class Stub:
+                  def __init__(self): self.checks = []
+              a = Stub()
+              A._check_simulator_pin(a, str(sy.parent), spec)
+              for c in a.checks:
+                  if getattr(c, "status", None) and str(c.status).lower() == "fail":
+                      fails.append(f"{sy.parent.name}: {getattr(c,'detail','')}")
+          if fails:
+              print("simulator-pin FAILURES:"); [print(" ", f) for f in fails]; sys.exit(1)
+          print("all study simulator pins OK")
+          PY
+      - name: Publish render check (no study would 404)
+        run: |
+          uv pip install --reinstall-package vivarium-workbench "vivarium-workbench @ git+https://github.com/vivarium-collective/vivarium-workbench.git@main"
+          uv run vivarium-workbench-publish --workspace . --out "${RUNNER_TEMP:-/tmp}/render-check"
+          test -f "${RUNNER_TEMP:-/tmp}/render-check/index.html"
